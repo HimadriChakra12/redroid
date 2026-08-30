@@ -20,10 +20,25 @@ else
         "$TAG" \
         androidboot.redroid_gpu_mode=host \
         androidboot.use_memfd=1 \
+        androidboot.redroid_width=1920 \
+        androidboot.redroid_height=1080 \
+        androidboot.redroid_dpi=280 \
         >/dev/null
 fi
 
 adb_wait_boot "$ADB_PORT"
+
+# Best-effort symlink to Android's shared storage, for browsing files the
+# device itself wrote (screenshots, exports, etc). This directory is owned
+# by root/media_rw inside the container, so it may not be host-readable
+# without a one-time `sudo setfacl -R -m u:$(id -un):rX -d -m u:$(id -un):rX
+# $DROID_DIR/media` — that's optional and only matters for reading device
+# output. For getting files FROM the host TO the device, use `make push
+# FILES="..."` instead (scripts/push.sh) — it goes over adb and needs no
+# host permissions at all.
+STORAGE_LINK="$HOME/.droidstorage"
+MEDIA_DIR="$DROID_DIR/media/0"
+ln -sfn "$MEDIA_DIR" "$STORAGE_LINK" 2>/dev/null || true
 
 FRESH_MARKER="$DROID_DIR/.provisioned"
 if [ ! -f "$FRESH_MARKER" ]; then

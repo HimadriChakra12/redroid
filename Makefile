@@ -1,4 +1,4 @@
-.PHONY: image up setup provision strip run stop shell logs clean
+.PHONY: image up setup provision strip run stop shell logs clean push install-push
 
 image:    ## Build the local redroid+MindTheGapps image (slow, run once / on updates)
 	@bash scripts/build-image.sh
@@ -16,6 +16,13 @@ setup: up provision strip  ## Full first-run: boot + install curated apps + stri
 
 run: up   ## Launch the scrcpy display window (freeform enabled)
 	@bash scripts/run-display.sh
+
+push: ## Build the standalone droid-push binary (src/droid-push.c)
+	@$(CC) -Wall -Wextra -O2 -o push src/push.c
+
+install-push: push ## Build + install droid-push to ~/.local/bin (must be on PATH)
+	@install -Dm755 push /usr/local/bin/push
+	@echo "installed push"
 
 stop:     ## Stop the container (keeps ~/.droid and the image)
 	@bash scripts/down.sh
