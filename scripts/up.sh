@@ -16,8 +16,9 @@ else
         --restart=unless-stopped \
         -v "$DROID_DIR:/data" \
         -p "${ADB_PORT}:5555" \
+        --device /dev/dri:/dev/dri \
         "$TAG" \
-        androidboot.redroid_gpu_mode=guest \
+        androidboot.redroid_gpu_mode=host \
         androidboot.use_memfd=1 \
         >/dev/null
 fi

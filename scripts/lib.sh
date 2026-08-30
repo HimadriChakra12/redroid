@@ -46,18 +46,88 @@ desynced from a protobuf update — 'sudo pacman -Syu' or reinstall android-tool
         adb connect "${ADB_HOST}:${port}" >/dev/null 2>&1 || true
     done
     log "boot complete"
+
+    # With GApps present, Play Protect's package verifier intercepts adb
+    # installs too and phones home to check unrecognized APKs. Well-known
+    # apps (already in Play Protect's cache) install instantly; obscure or
+    # self-hosted APKs can silently stall for minutes waiting on that
+    # round-trip. This setting scopes the skip to adb-initiated installs
+    # only — it doesn't touch Play Store-side scanning.
+    adb -s "${ADB_HOST}:${port}" shell settings put global verifier_verify_adb_installs 0 \
+        </dev/null >/dev/null 2>&1 || warn "couldn't disable adb-install verification (non-fatal, installs may just be slower)"
+}
+
+# Check whether a package is already installed on the device. $1 is the full
+# "adb -s host:port" prefix, $2 is the Android package name (e.g.
+# com.aurora.store). Returns 0 (true) if installed, 1 otherwise.
+is_pkg_installed() {
+    local adb_prefix="$1" pkg="$2"
+    $adb_prefix shell pm path "$pkg" </dev/null >/dev/null 2>&1
+}
+
+# Extract the package name (applicationId) from a downloaded .apk. Used for
+# github/url sources where we don't know the package name up front — only
+# the apk file tells us. Echoes the package name, or nothing if it can't be
+# determined (missing aapt/aapt2, or an unparseable apk).
+extract_apk_package() {
+    local apk="$1"
+    if command -v aapt >/dev/null 2>&1; then
+        aapt dump badging "$apk" 2>/dev/null \
+            | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1
+    elif command -v aapt2 >/dev/null 2>&1; then
+        aapt2 dump badging "$apk" 2>/dev/null \
+            | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1
+    fi
+}
+
+# Download $1 into $2 with a visible progress bar. curl's own --progress-bar
+# already writes to stderr, so this is just a thin, named wrapper used by
+# every dl_* function below for consistent behavior.
+_curl_with_progress() {
+    local url="$1" out="$2"
+    curl -f -A "droid-provisioner/1.0 (+https://github.com/HimadriChakra12)" \
+        -L --progress-bar -o "$out" "$url"
 }
 
 # Fetch the latest APK for an F-Droid package id into $2.
+#
+# NOTE: the v1 packages API used to return an explicit "apkName" field per
+# package, which is what this used to key off of. That field is gone now —
+# the API only returns versionName/versionCode. F-Droid's repo layout is
+# still a fixed, documented convention though: {packageName}_{versionCode}.apk
+# under https://f-droid.org/repo/, so we build the filename ourselves instead
+# of relying on a field that no longer exists.
 dl_fdroid_apk() {
     local pkg="$1" out="$2"
     require curl; require jq
     log "resolving latest $pkg from F-Droid"
-    local apk_name
-    apk_name=$(curl -fsSL "https://f-droid.org/api/v1/packages/${pkg}" \
-        | jq -r '.packages | sort_by(.versionCode) | last | .apkName')
-    [ -n "$apk_name" ] && [ "$apk_name" != "null" ] || die "could not resolve $pkg on F-Droid"
-    curl -fsSL "https://f-droid.org/repo/${apk_name}" -o "$out"
+    local http_code body version_code apk_name
+    local api_url="https://f-droid.org/api/v1/packages/${pkg}"
+    # Don't let -f swallow the body on a non-200: capture status and body
+    # separately so a failure is diagnosable instead of a bare "could not
+    # resolve".
+    body=$(curl -sSL -A "droid-provisioner/1.0 (+https://github.com/HimadriChakra12)" \
+        -w $'\n%{http_code}' "$api_url") || die "curl request to $api_url failed outright (network/DNS?)"
+    http_code=$(printf '%s' "$body" | tail -n1)
+    body=$(printf '%s' "$body" | sed '$d')
+
+    if [ "$http_code" != "200" ]; then
+        warn "F-Droid API returned HTTP $http_code for $pkg"
+        warn "body: $(printf '%s' "$body" | head -c 300)"
+        die "could not resolve $pkg on F-Droid (HTTP $http_code)"
+    fi
+
+    version_code=$(printf '%s' "$body" | jq -r '.packages | sort_by(.versionCode) | last | .versionCode')
+    if [ -z "$version_code" ] || [ "$version_code" = "null" ]; then
+        warn "F-Droid API returned 200 but no usable versionCode for $pkg"
+        warn "raw response: $(printf '%s' "$body" | head -c 500)"
+        die "could not resolve $pkg on F-Droid (unexpected response shape)"
+    fi
+    apk_name="${pkg}_${version_code}.apk"
+
+    log "downloading $apk_name"
+    _curl_with_progress "https://f-droid.org/repo/${apk_name}" "$out" \
+        || die "download of $apk_name failed (bad filename guess? check https://f-droid.org/repo/${apk_name} by hand)"
     log "downloaded $apk_name -> $out"
 }
 
@@ -70,7 +140,8 @@ dl_github_release_apk() {
     url=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
         | jq -r '.assets[] | select(.name | test("\\.apk$")) | .browser_download_url' | head -1)
     [ -n "$url" ] || die "no APK asset found in latest release of $repo"
-    curl -fsSL "$url" -o "$out"
+    log "downloading $(basename "$url")"
+    _curl_with_progress "$url" "$out" || die "download of $url failed"
     log "downloaded $(basename "$url") -> $out"
 }
 
@@ -79,5 +150,40 @@ dl_direct_apk() {
     local url="$1" out="$2"
     require curl
     log "downloading $url"
-    curl -fsSL "$url" -o "$out"
+    _curl_with_progress "$url" "$out" || die "download of $url failed"
+    log "downloaded $(basename "$url") -> $out"
+}
+
+# Install an APK over adb with a lightweight progress spinner, since `adb
+# install` gives no percentage of its own — just silence until it prints
+# "Success"/"Failure" at the end. $1 is the full "adb -s host:port" prefix
+# (as used elsewhere in this project), $2 is the apk path.
+adb_install_with_progress() {
+    local adb_prefix="$1" apk="$2"
+    local size_h
+    size_h=$(du -h "$apk" 2>/dev/null | cut -f1)
+    log "installing $(basename "$apk") (${size_h:-?}) ..."
+
+    local out
+    out=$(mktemp)
+    $adb_prefix install -r "$apk" </dev/null >"$out" 2>&1 &
+    local pid=$!
+
+    local spin='|/-\' i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r\033[1;34m[droid]\033[0m installing %s ' "${spin:i++%${#spin}:1}" >&2
+        sleep 0.2
+    done
+    wait "$pid"
+    local rc=$?
+    printf '\r\033[K' >&2  # clear the spinner line
+
+    if [ "$rc" -ne 0 ] || ! grep -q '^Success' "$out"; then
+        warn "adb install output:"
+        sed 's/^/  /' "$out" >&2
+        rm -f "$out"
+        die "adb install failed for $(basename "$apk")"
+    fi
+    rm -f "$out"
+    log "installed $(basename "$apk")"
 }

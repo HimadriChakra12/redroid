@@ -10,11 +10,6 @@
     "id": "org.mozilla.fennec_fdroid"
   },
   {
-    "name": "Bare Browser",
-    "source": "github",
-    "id": "Shshtwy/bare-browser"
-  },
-  {
     "name": "seedsnap",
     "source": "url",
     "id": "https://github.com/HimadriChakra12/.droidots/releases/download/seedsnap/seedsnap.apk"

@@ -10,3 +10,7 @@ com.android.deskclock
 com.android.calendar
 com.android.email
 com.android.gallery3d
+# WebView Shell: a chromium test/demo app, NOT the actual WebView rendering
+# engine (com.google.android.webview) that other apps depend on — safe to
+# remove on its own.
+org.chromium.webview_shell
