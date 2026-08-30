@@ -14,6 +14,14 @@
 : "${ADB_PORT:=5555}"
 : "${ADB_HOST:=127.0.0.1}"
 
+# Resource ceiling for the container. Doesn't make anything faster — just
+# caps the damage if some GApps/Play-services background process runs away,
+# which otherwise happens silently and heats/slows the whole host. Kaby
+# Lake-R UHD 620 class machine: leave a couple cores/GB free for the host
+# itself. Tune to your actual core/RAM count.
+: "${DOCKER_CPUS:=3}"
+: "${DOCKER_MEM:=4g}"
+
 # Where the redroid-script clone lives (used only by scripts/build-image.sh)
 : "${REDROID_SCRIPT_DIR:=$HOME/.cache/droid/redroid-script}"
 : "${REDROID_SCRIPT_REPO:=https://github.com/ayasa520/redroid-script.git}"

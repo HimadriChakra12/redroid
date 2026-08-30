@@ -14,6 +14,8 @@ else
         --name "$CONTAINER_NAME" \
         --privileged \
         --restart=unless-stopped \
+        --cpus="$DOCKER_CPUS" \
+        --memory="$DOCKER_MEM" \
         -v "$DROID_DIR:/data" \
         -p "${ADB_PORT}:5555" \
         --device /dev/dri:/dev/dri \
@@ -22,7 +24,7 @@ else
         androidboot.use_memfd=1 \
         androidboot.redroid_width=1920 \
         androidboot.redroid_height=1080 \
-        androidboot.redroid_dpi=280 \
+        androidboot.redroid_dpi=160 \
         >/dev/null
 fi
 
