@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Aurora Store",
+    "source": "fdroid",
+    "id": "com.aurora.store"
+  },
+  {
+    "name": "Fennec F-Droid",
+    "source": "fdroid",
+    "id": "org.mozilla.fennec_fdroid"
+  },
+  {
+    "name": "Bare Browser",
+    "source": "github",
+    "id": "Shshtwy/bare-browser"
+  },
+  {
+    "name": "seedsnap",
+    "source": "url",
+    "id": "https://github.com/HimadriChakra12/.droidots/releases/download/seedsnap/seedsnap.apk"
+  }
+]

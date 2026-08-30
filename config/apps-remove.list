@@ -1,0 +1,12 @@
+# AOSP/vendor default apps we don't want. Adjust freely — this is
+# just `pm uninstall --user 0`, so it's reversible per-package.
+com.android.browser
+com.android.camera
+com.android.camera2
+com.android.dialer
+com.android.contacts
+com.android.messaging
+com.android.deskclock
+com.android.calendar
+com.android.email
+com.android.gallery3d
