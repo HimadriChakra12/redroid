@@ -32,6 +32,41 @@ make run       # opens the scrcpy window
 
 After that, day to day it's just `make run` (implies `up`).
 
+## Getting files in and out
+
+- **Host → device**: `src/push.c` is a standalone C binary (no `make`/repo
+  context needed once built) that pushes files into the device's
+  `/sdcard/Download` over `adb push` — sudoless by construction, since it
+  never touches the host bind-mount, just the adb protocol.
+
+  ```
+  make install-push   # builds + installs to ~/.local/bin/push
+  push file1.apk photo.jpg
+  ```
+
+  Override the target device with `ADB_HOST`/`ADB_PORT` env vars if you're
+  not on the default `127.0.0.1:5555`.
+
+- **Device → host**: Android's shared storage is symlinked automatically at
+  `~/.droidstorage` (→ `~/.droid/media/0`) by `up.sh` — copy straight out of
+  `~/.droidstorage/Download` etc. That directory is written by root/
+  media_rw inside the container, so `up.sh` also grants your user read
+  access via a POSIX ACL (`setfacl`, tried with `sudo -n` so it never hangs
+  on a password prompt). If that fails silently (no passwordless sudo
+  configured), it'll print the exact command to run once yourself:
+
+  ```
+  sudo setfacl -R -m u:$(whoami):rX -d -m u:$(whoami):rX ~/.droid/media
+  ```
+
+  To make even that one-time step unnecessary, add a scoped sudoers rule
+  (`sudo visudo -f /etc/sudoers.d/droid-storage`) so `up.sh`'s `sudo -n`
+  attempt succeeds without ever prompting:
+
+  ```
+  himadri ALL=(root) NOPASSWD: /usr/bin/setfacl -R -m u\:himadri\:rX -d -m u\:himadri\:rX /home/himadri/.droid/media
+  ```
+
 ## Layout
 
 ```

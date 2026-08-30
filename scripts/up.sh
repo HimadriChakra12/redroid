@@ -28,17 +28,28 @@ fi
 
 adb_wait_boot "$ADB_PORT"
 
-# Best-effort symlink to Android's shared storage, for browsing files the
-# device itself wrote (screenshots, exports, etc). This directory is owned
-# by root/media_rw inside the container, so it may not be host-readable
-# without a one-time `sudo setfacl -R -m u:$(id -un):rX -d -m u:$(id -un):rX
-# $DROID_DIR/media` — that's optional and only matters for reading device
-# output. For getting files FROM the host TO the device, use `make push
-# FILES="..."` instead (scripts/push.sh) — it goes over adb and needs no
-# host permissions at all.
+# Symlink to Android's shared storage (Download, Pictures, DCIM, ...), for
+# browsing/copying out files the device itself wrote. This directory is
+# owned by root/media_rw inside the container (privileged, non-userns-
+# remapped), so it isn't host-readable by default — grant read+traverse via
+# a POSIX ACL (adds a permission without touching the existing root
+# ownership Android needs to keep writing there; -d makes it apply to files
+# created later too). Tried non-interactively (sudo -n) so this never hangs
+# waiting on a password prompt inside a script.
 STORAGE_LINK="$HOME/.droidstorage"
 MEDIA_DIR="$DROID_DIR/media/0"
 ln -sfn "$MEDIA_DIR" "$STORAGE_LINK" 2>/dev/null || true
+
+if command -v setfacl >/dev/null 2>&1; then
+    if sudo -n setfacl -R -m "u:$(id -un):rX" -d -m "u:$(id -un):rX" "$DROID_DIR/media" 2>/dev/null; then
+        log "storage readable at $STORAGE_LINK"
+    else
+        warn "$STORAGE_LINK isn't readable yet — run this once, then it'll stay that way:"
+        warn "  sudo setfacl -R -m u:$(id -un):rX -d -m u:$(id -un):rX $DROID_DIR/media"
+    fi
+else
+    warn "'setfacl' not found (pacman -S acl) — can't grant read access to $STORAGE_LINK automatically."
+fi
 
 FRESH_MARKER="$DROID_DIR/.provisioned"
 if [ ! -f "$FRESH_MARKER" ]; then
