@@ -1,4 +1,8 @@
-.PHONY: image up setup provision strip run stop shell logs clean push install-push
+.PHONY: image up setup provision strip run stop shell logs clean push install-push launch install-launch
+
+REPO_DIR := $(CURDIR)
+PREFIX   ?= /usr/local
+DESKTOP_DIR := $(HOME)/.local/share/applications
 
 image:    ## Build the local redroid+MindTheGapps image (slow, run once / on updates)
 	@bash scripts/build-image.sh
@@ -21,8 +25,20 @@ push: ## Build the standalone droid-push binary (src/droid-push.c)
 	@$(CC) -Wall -Wextra -O2 -o push src/push.c
 
 install-push: push ## Build + install droid-push to ~/.local/bin (must be on PATH)
-	@install -Dm755 push /usr/local/bin/push
+	@sudo install -Dm755 push $(PREFIX)/bin/push
 	@echo "installed push"
+
+launch: ## Build the droid-launch binary (src/launch.c), repo path baked in
+	@$(CC) -Wall -Wextra -O2 -DREPO_DIR=\"$(REPO_DIR)\" -o droid-launch src/launch.c
+
+install-launch: launch ## Build + install droid-launch and a .desktop entry
+	@sudo install -Dm755 droid-launch $(PREFIX)/bin/droid-launch
+	@install -Dm644 droid.desktop $(DESKTOP_DIR)/droid.desktop
+	@sed -i "s|^Exec=.*|Exec=$(PREFIX)/bin/droid-launch|" $(DESKTOP_DIR)/droid.desktop
+	@update-desktop-database $(DESKTOP_DIR) 2>/dev/null || true
+	@echo "installed droid-launch to $(PREFIX)/bin, droid.desktop to $(DESKTOP_DIR)"
+
+install: install-launch install-push
 
 stop:     ## Stop the container (keeps ~/.droid and the image)
 	@bash scripts/down.sh

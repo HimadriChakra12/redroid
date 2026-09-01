@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ReDroid
+Comment=Launch the redroid Android container (make run)
+Exec=/usr/local/bin/droid-launch
+Terminal=true
+Categories=System;Emulator;
