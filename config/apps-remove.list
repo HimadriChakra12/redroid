@@ -40,3 +40,11 @@ com.google.android.gm.exchange
 com.google.android.googlequicksearchbox
 com.google.android.partnersetup
 org.chromium.webview_shell
+com.google.android.projection.gearhead
+com.android.traceur
+com.android.dynsystem
+com.google.android.syncadapters.calendar
+com.android.providers.calendar
+com.android.localtransport
+com.android.se
+com.google.android.verifier
